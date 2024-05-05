@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Registro</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+</head>
+
+<body>
+
+    <div class="container">
+        <h2 class="mt-5">Crear una Cuenta Nueva</h2>
+        <form method="post">
+            {% csrf_token %}
+            <table class="table">
+                {{ form.as_table}}
+            </table>
+            <button type="submit" class="btn btn-primary">Registrarse</button>
+        </form>
+    </div>
+</body>
+
+</html>

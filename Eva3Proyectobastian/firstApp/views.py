@@ -1,0 +1,148 @@
+from django.shortcuts import get_object_or_404,render,redirect
+from django.contrib.auth import login, logout, authenticate
+from .models import Producto
+from django.contrib.auth.decorators import login_required
+from .forms import UserRegisterForm
+from django.contrib import messages
+import datetime
+import random
+from .forms import tarjeta
+from django.contrib import messages
+
+# Create your views here.
+def home(request):
+    return render(request, 'home.html')
+@login_required
+def tarjeta_form(request):
+    form = tarjeta()
+    if request.method == 'POST':
+        form = tarjeta(request.POST)
+        if form.is_valid():
+            messages.success(request, "COMPRA REALIZADA")
+            return redirect('detalles')  # Redirige después de definir el mensaje
+    else:
+        form = tarjeta()
+
+    return render(request, 'tarjeta_form.html', {'formulario_tarjeta': form})
+
+@login_required
+def register(request):
+    if request.method == 'POST':
+        form = UserRegisterForm(request.POST)
+        if form.is_valid():
+            form.save()
+            username = form.cleaned_data.get('username')
+            messages.success(request, f'Usuario {username} creado con éxito.')
+            return redirect('list_products')
+    else:
+        form = UserRegisterForm()
+    return render(request, 'register.html', {'form': form})
+
+
+
+def user_login(request):
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        user = authenticate(request, username=username, password=password)
+        if user is not None:
+            login(request, user)
+            messages.success(request, "Sesion iniciada")
+            return redirect('list_products')
+        else:
+            messages.error(request, 'Nombre de usuario o contraseña no válidos')
+    return render(request, 'login.html')
+
+def list_products(request):
+    products = Producto.objects.all()
+    messages_success = messages.get_messages(request)
+    data = {
+        'products': products
+    }
+    if messages_success:
+        data['messages_success'] = messages_success
+    return render(request, 'home.html', data)
+
+@login_required
+def user_logout(request):
+    logout(request)
+    messages.success(request, "Sesion Cerrada")
+    return redirect('list_products')
+
+@login_required
+def add_to_cart(request, product_id):
+    cart_key = f'cart_{request.user.id}'  # Clave única del carrito para cada usuario
+    cart = request.session.get(cart_key, {})
+
+    if str(product_id) in cart:
+        cart[str(product_id)] += 1
+    else:
+        cart[str(product_id)] = 1
+
+    request.session[cart_key] = cart
+    return redirect('list_products')
+
+@login_required
+def view_cart(request):
+    cart_key = f'cart_{request.user.id}'
+    cart = request.session.get(cart_key, {})
+    products_in_cart = {}
+    total_precio = 0  
+    
+    for product_id, quantity in cart.items():
+        product = get_object_or_404(Producto, id=product_id)
+        products_in_cart[product] = quantity
+        total_precio += product.precio * quantity
+
+    if total_precio > 0:
+        total_precio = total_precio + (total_precio * 0.19)
+        total_precio = round(total_precio, 2)
+
+    data = {
+        'cart': products_in_cart, 
+        'total_precio': total_precio
+    }
+    return render(request, 'view_cart.html', data)
+
+@login_required
+def detalles(request):
+    cart_key = f'cart_{request.user.id}'
+    cart = request.session.get(cart_key, {})
+    products_in_cart = {}
+    total_precio = 0  
+    for product_id, quantity in cart.items():
+        product = get_object_or_404(Producto, id=product_id)
+        products_in_cart[product] = quantity
+        total_precio += product.precio * quantity  
+        
+
+    if total_precio > 0:
+        monto_neto = total_precio
+        iva = total_precio * 0.19
+        total_precio = total_precio + iva
+        total_precio = round(total_precio, 2)
+        fecha = datetime.datetime.now().strftime("%d/%m/%Y")
+        codigo = ''.join(random.choice('0123456789') for _ in range(6))
+
+        data = {
+            'cart': products_in_cart, 
+            'total_precio': total_precio,
+            'fecha_actual':fecha,
+            'codigo':  codigo,
+            'iva':iva,
+            'monto_neto':monto_neto,
+            }
+        messages_success = messages.get_messages(request)
+        if messages_success:
+            data['messages_success'] = messages_success
+            clear_cart(request)
+    return render(request, 'detalles.html',data )
+
+
+@login_required
+def clear_cart(request):
+    cart_key = f'cart_{request.user.id}'
+    if cart_key in request.session:
+        del request.session[cart_key]
+    return redirect('view_cart')
+
